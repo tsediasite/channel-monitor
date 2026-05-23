@@ -11,6 +11,7 @@ CHANNEL_ID = os.getenv("CHANNEL_ID")
 MY_CHAT_ID = int(os.getenv("MY_CHAT_ID"))
 THRESHOLD = int(os.getenv("THRESHOLD", 5))
 STATE_FILE = "state.json"
+INTERVAL = 300  # 300 секунд = 5 хвилин
 
 def load_state():
     if os.path.exists(STATE_FILE):
@@ -22,8 +23,7 @@ def save_state(data):
     with open(STATE_FILE, "w") as f:
         json.dump(data, f)
 
-async def check_subscribers():
-    bot = Bot(token=BOT_TOKEN)
+async def check_subscribers(bot):
     count = await bot.get_chat_member_count(CHANNEL_ID)
     state = load_state()
     last_count = state.get("last_count")
@@ -57,11 +57,23 @@ async def check_subscribers():
         )
 
         await bot.send_message(chat_id=MY_CHAT_ID, text=message)
-        print(f"Сповіщення надіслано")
+        print("Сповіщення надіслано")
     else:
         print(f"Зміна {diff} — в межах норми")
 
     save_state({"last_count": count})
 
+async def main():
+    bot = Bot(token=BOT_TOKEN)
+    print("Моніторинг запущено. Перевірка кожні 5 хвилин.")
+    
+    while True:
+        try:
+            await check_subscribers(bot)
+        except Exception as e:
+            print(f"Помилка: {e}")
+        
+        await asyncio.sleep(INTERVAL)  # чекаємо 5 хвилин
+
 if __name__ == "__main__":
-    asyncio.run(check_subscribers())
+    asyncio.run(main())
