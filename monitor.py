@@ -15,9 +15,9 @@ def load_state():
             return json.load(f)
     return {"last_count": None}
 
-def save_state(data):
+def save_state(count):
     with open(STATE_FILE, "w") as f:
-        json.dump(data, f)
+        json.dump({"last_count": count}, f)
 
 async def main():
     bot = Bot(token=BOT_TOKEN)
@@ -25,10 +25,10 @@ async def main():
     state = load_state()
     last_count = state.get("last_count")
 
-    print(f"Підписників зараз: {count}")
+    print(f"Зараз: {count}, було: {last_count}")
 
     if last_count is None:
-        save_state({"last_count": count})
+        save_state(count)
         await bot.send_message(
             chat_id=MY_CHAT_ID,
             text=f"✅ Моніторинг запущено\nПідписників зараз: {count}"
@@ -54,7 +54,7 @@ async def main():
     else:
         print(f"Зміна {diff} — в межах норми")
 
-    save_state({"last_count": count})
+    save_state(count)
 
 if __name__ == "__main__":
     asyncio.run(main())
