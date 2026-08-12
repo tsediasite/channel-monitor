@@ -5,14 +5,15 @@ on:
     - cron: '*/5 * * * *'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   monitor:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
-        with:
-          token: ${{ secrets.GH_TOKEN }}
 
       - name: Setup Python
         uses: actions/setup-python@v4
@@ -28,5 +29,5 @@ jobs:
           CHANNEL_ID: ${{ secrets.CHANNEL_ID }}
           MY_CHAT_ID: ${{ secrets.MY_CHAT_ID }}
           THRESHOLD: ${{ secrets.THRESHOLD }}
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python monitor.py
