@@ -1,94 +1,32 @@
-import os
-import json
-import asyncio
-import urllib.request
-import urllib.error
-import base64
-from telegram import Bot
+name: Channel Monitor
 
-BOT_TOKEN = os.environ["BOT_TOKEN"]
-CHANNEL_ID = os.environ["CHANNEL_ID"]
-MY_CHAT_ID = int(os.environ["MY_CHAT_ID"])
-THRESHOLD = int(os.environ.get("THRESHOLD", 5))
-GH_TOKEN = os.environ["GH_TOKEN"]
-GH_REPO = os.environ["GITHUB_REPOSITORY"]
-STATE_FILE = "state.json"
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
 
-def gh_api(method, path, data=None):
-    url = f"https://api.github.com/repos/{GH_REPO}/contents/{path}"
-    req = urllib.request.Request(url)
-    req.add_header("Authorization", f"token {GH_TOKEN}")
-    req.add_header("Accept", "application/vnd.github+json")
-    req.add_header("Content-Type", "application/json")
-    req.method = method
-    if data:
-        req.data = json.dumps(data).encode()
-    try:
-        with urllib.request.urlopen(req) as r:
-            return json.loads(r.read())
-    except urllib.error.HTTPError as e:
-        if e.code == 404:
-            return None
-        raise
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.GH_TOKEN }}
 
-def load_state():
-    result = gh_api("GET", STATE_FILE)
-    if result is None:
-        return {"last_count": None, "sha": None}
-    content = base64.b64decode(result["content"]).decode()
-    state = json.loads(content)
-    state["sha"] = result["sha"]
-    return state
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
 
-def save_state(last_count, sha=None):
-    content = base64.b64encode(
-        json.dumps({"last_count": last_count}).encode()
-    ).decode()
-    data = {
-        "message": "update state",
-        "content": content,
-    }
-    if sha:
-        data["sha"] = sha
-    gh_api("PUT", STATE_FILE, data)
+      - name: Install dependencies
+        run: pip install python-telegram-bot==20.7
 
-async def main():
-    bot = Bot(token=BOT_TOKEN)
-    count = await bot.get_chat_member_count(CHANNEL_ID)
-    state = load_state()
-    last_count = state.get("last_count")
-    sha = state.get("sha")
-
-    print(f"Підписників зараз: {count}, було: {last_count}")
-
-    if last_count is None:
-        save_state(count, sha)
-        await bot.send_message(
-            chat_id=MY_CHAT_ID,
-            text=f"✅ Моніторинг запущено\nПідписників зараз: {count}"
-        )
-        return
-
-    diff = count - last_count
-
-    if abs(diff) >= THRESHOLD:
-        emoji = "🔴" if diff < 0 else "🟢"
-        direction = f"відписалось {abs(diff)}" if diff < 0 else f"підписалось {diff}"
-        await bot.send_message(
-            chat_id=MY_CHAT_ID,
-            text=(
-                f"{emoji} Зміна підписників!\n\n"
-                f"Канал: {CHANNEL_ID}\n"
-                f"Було: {last_count}\n"
-                f"Стало: {count}\n"
-                f"Зміна: {direction}"
-            )
-        )
-        print("Сповіщення надіслано")
-    else:
-        print(f"Зміна {diff} — в межах норми")
-
-    save_state(count, sha)
-
-if __name__ == "__main__":
-    asyncio.run(main())
+      - name: Run monitor
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          CHANNEL_ID: ${{ secrets.CHANNEL_ID }}
+          MY_CHAT_ID: ${{ secrets.MY_CHAT_ID }}
+          THRESHOLD: ${{ secrets.THRESHOLD }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: python monitor.py
